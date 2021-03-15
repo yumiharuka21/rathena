@@ -82,6 +82,8 @@ int pc_expiration_tid = INVALID_TIMER;
 struct fame_list smith_fame_list[MAX_FAME_LIST];
 struct fame_list chemist_fame_list[MAX_FAME_LIST];
 struct fame_list taekwon_fame_list[MAX_FAME_LIST];
+struct fame_list bg_fame_list[MAX_FAME_LIST];
+struct fame_list woe_fame_list[MAX_FAME_LIST];
 
 struct s_job_info job_info[CLASS_COUNT];
 
@@ -448,54 +450,6 @@ int pc_get_group_level(struct map_session_data *sd) {
 	return sd->group_level;
 }
 
-/**
- * Remove a player from queue after timeout
- * @param tid: Timer ID
- * @param tick: Timer
- * @param id: ID
- * @return 0 on success or 1 otherwise
- */
-static TIMER_FUNC(pc_on_expire_active)
-{
-	map_session_data *sd = (map_session_data *)data;
-
-	nullpo_retr(1, sd);
-
-	sd->tid_queue_active = INVALID_TIMER;
-
-	bg_queue_leave(sd);
-	clif_bg_queue_entry_init(sd);
-	return 0;
-}
-
-/**
- * Function used to set timer externally
- * @param sd: Player data
- */
-void pc_set_bg_queue_timer(map_session_data *sd) {
-	nullpo_retv(sd);
-
-	if (sd->tid_queue_active != INVALID_TIMER) {
-		delete_timer(sd->tid_queue_active, pc_on_expire_active);
-		sd->tid_queue_active = INVALID_TIMER;
-	}
-
-	sd->tid_queue_active = add_timer(gettick() + 20000, pc_on_expire_active, 0, (intptr_t)sd);
-}
-
-/**
- * Function used to delete timer externally
- * @param sd: Player data
- */
-void pc_delete_bg_queue_timer(map_session_data *sd) {
-	nullpo_retv(sd);
-
-	if (sd->tid_queue_active != INVALID_TIMER) {
-		delete_timer(sd->tid_queue_active, pc_on_expire_active);
-		sd->tid_queue_active = INVALID_TIMER;
-	}
-}
-
 static TIMER_FUNC(pc_invincible_timer){
 	struct map_session_data *sd;
 
@@ -648,6 +602,42 @@ void pc_delspiritball(struct map_session_data *sd,int count,int type)
 }
 
 /**
+* Increases a player's battleground points and displays a notice to him
+* @param sd Player
+* @param count BG Point
+*/
+void pc_addbgpoints(struct map_session_data *sd,int count)
+{
+	nullpo_retv(sd);
+
+	clif_specialeffect(&sd->bl, EF_ENHANCE, SELF);
+	sd->status.bgstats.points += count;
+	if (sd->status.bgstats.points > MAX_FAME)
+		sd->status.bgstats.points = MAX_FAME;
+
+	clif_rank_info(sd,count,sd->status.bgstats.points,1);
+	chrif_updatefamelist(sd,1);
+}
+
+/**
+* Increases a player's war of emperium points and displays a notice to him
+* @param sd Player
+* @param count WoE Point
+*/
+void pc_addwoepoints(struct map_session_data *sd,int count)
+{
+	nullpo_retv(sd);
+
+	clif_specialeffect(&sd->bl, EF_ENHANCE, SELF);
+	sd->status.wstats.points += count;
+	if (sd->status.wstats.points > MAX_FAME)
+		sd->status.wstats.points = MAX_FAME;
+
+	clif_rank_info(sd,count,sd->status.wstats.points,0);
+	chrif_updatefamelist(sd,2);
+}
+
+/**
  * Adds a soulball to player
  * @param sd: Player data
  * @param max: Max amount of soulballs
@@ -731,7 +721,7 @@ void pc_addfame(struct map_session_data *sd,int count)
 	}
 
 	clif_update_rankingpoint(sd,ranktype,count);
-	chrif_updatefamelist(sd);
+	chrif_updatefamelist(sd,0);
 }
 
 /**
@@ -744,6 +734,23 @@ unsigned char pc_famerank(uint32 char_id, int job)
 {
 	uint8 i;
 
+	// Battleground Rank
+	if (job == -1) {
+		for(i = 0; i < MAX_FAME_LIST; i++){
+				if(bg_fame_list[i].id == char_id)
+				    return i + 1;
+			}
+			return 0;
+	}
+	// War of Emperium Rank
+	else if (job == -2) {
+		for(i = 0; i < MAX_FAME_LIST; i++){
+				if(woe_fame_list[i].id == char_id)
+				    return i + 1;
+			}
+			return 0;
+	}
+	
 	switch(job){
 		case MAPID_BLACKSMITH: // Blacksmith
 		    for(i = 0; i < MAX_FAME_LIST; i++){
@@ -1606,7 +1613,6 @@ bool pc_authok(struct map_session_data *sd, uint32 login_id2, time_t expiration_
 	sd->expiration_tid = INVALID_TIMER;
 	sd->autotrade_tid = INVALID_TIMER;
 	sd->respawn_tid = INVALID_TIMER;
-	sd->tid_queue_active = INVALID_TIMER;
 
 	sd->skill_keep_using.tid = INVALID_TIMER;
 	sd->skill_keep_using.skill_id = 0;
@@ -1752,9 +1758,6 @@ bool pc_authok(struct map_session_data *sd, uint32 login_id2, time_t expiration_
 	
 	sd->bonus_script.head = NULL;
 	sd->bonus_script.count = 0;
-
-	// Initialize BG queue
-	sd->bg_queue_id = 0;
 
 #if PACKETVER_MAIN_NUM >= 20150507 || PACKETVER_RE_NUM >= 20150429 || defined(PACKETVER_ZERO)
 	sd->hatEffects = {};
@@ -5101,9 +5104,18 @@ int pc_getcash(struct map_session_data *sd, int cash, int points, e_log_pick_typ
  * @return Stored index in inventory, or -1 if not found.
  **/
 short pc_search_inventory(struct map_session_data *sd, t_itemid nameid) {
-	short i;
+	short i,x,y;
 	nullpo_retr(-1, sd);
 
+	if (map_getmapflag(sd->bl.m, MF_BG_CONSUME)) {
+		ARR_FIND( 0, MAX_INVENTORY, x, sd->inventory.u.items_inventory[x].nameid == nameid && ( MakeDWord(sd->inventory.u.items_inventory[x].card[2], sd->inventory.u.items_inventory[x].card[3]) == battle_config.bg_reserved_char_id ) && (sd->inventory.u.items_inventory[x].amount > 0 || nameid == 0) );
+			if( x < MAX_INVENTORY ) return x;
+	}
+	if (map_getmapflag(sd->bl.m, MF_WOE_CONSUME)) {
+		ARR_FIND( 0, MAX_INVENTORY, y, sd->inventory.u.items_inventory[y].nameid == nameid && ( MakeDWord(sd->inventory.u.items_inventory[y].card[2], sd->inventory.u.items_inventory[y].card[3]) == battle_config.woe_reserved_char_id ) && (sd->inventory.u.items_inventory[y].amount > 0 || nameid == 0) );
+			if( y < MAX_INVENTORY ) return y;
+	}
+	
 	ARR_FIND( 0, MAX_INVENTORY, i, sd->inventory.u.items_inventory[i].nameid == nameid && (sd->inventory.u.items_inventory[i].amount > 0 || nameid == 0) );
 	return ( i < MAX_INVENTORY ) ? i : -1;
 }
@@ -5623,6 +5635,13 @@ int pc_useitem(struct map_session_data *sd,int n)
 		return 0;/* regardless, effect is not run */
 	}
 
+	if( sd->inventory.u.items_inventory[n].card[0] == CARD0_CREATE) {
+		if (MakeDWord(sd->inventory.u.items_inventory[n].card[2], sd->inventory.u.items_inventory[n].card[3]) == battle_config.bg_reserved_char_id && !map_getmapflag(sd->bl.m, MF_BG_CONSUME))
+			return 0;
+		if (MakeDWord(sd->inventory.u.items_inventory[n].card[2], sd->inventory.u.items_inventory[n].card[3]) == battle_config.woe_reserved_char_id && !map_getmapflag(sd->bl.m, MF_WOE_CONSUME))
+			return 0;
+	}
+	
 	sd->itemid = item.nameid;
 	sd->itemindex = n;
 	if(sd->catch_target_class != PET_CATCH_FAIL) //Abort pet catching.
@@ -6060,7 +6079,7 @@ enum e_setpos pc_setpos(struct map_session_data* sd, unsigned short mapindex, in
 		}
 
 		if (sd->bg_id && !mapdata->flag[MF_BATTLEGROUND]) // Moving to a map that isn't a Battlegrounds
-			bg_team_leave(sd, false, true);
+			bg_team_leave(sd,0);
 
 		sd->state.pmap = sd->bl.m;
 		if (sc && sc->count) { // Cancel some map related stuff.
@@ -8550,6 +8569,28 @@ int pc_dead(struct map_session_data *sd,struct block_list *src)
 			// To-do: Receive exp on certain occasions
 #endif
 		}
+		// Extended Features BG
+		if (sd && sd->bg_id) {
+			achievement_update_objective(sd, AG_BG_DIE, 1, 1);
+			add2limit(sd->status.bgstats.death_count, 1, USHRT_MAX);
+			if (!strcmpi(map[sd->bl.m].name,"bat_b03"))
+				add2limit(sd->status.bgstats.td_deaths, 1, USHRT_MAX);
+		}
+		if (ssd->bg_id && ssd->bg_id != sd->bg_id) {
+			achievement_update_objective(ssd, AG_BG_DAMAGE, 1, ssd->status.bgstats.damage_done);
+			achievement_update_objective(ssd, AG_BG_KILL, 1, 1);
+			add2limit(ssd->status.bgstats.kill_count, 1, USHRT_MAX);
+			if (!strcmpi(map[sd->bl.m].name,"bat_b03"))
+				add2limit(ssd->status.bgstats.td_kills, 1, USHRT_MAX);
+		}
+		
+		if (map_flag_gvg2(sd->bl.m)) {
+			achievement_update_objective(sd, AG_WOE_DAMAGE, 1, sd->status.wstats.damage_done);
+			achievement_update_objective(sd, AG_WOE_DIE, 1, 1);
+			achievement_update_objective(ssd, AG_WOE_KILL, 1, 1);
+			add2limit(sd->status.wstats.death_count, 1, USHRT_MAX);
+			add2limit(ssd->status.wstats.kill_count, 1, USHRT_MAX);
+		}
 	}
 
 	if(battle_config.bone_drop==2
@@ -8696,13 +8737,10 @@ int pc_dead(struct map_session_data *sd,struct block_list *src)
 		return 1|8;
 	}
 	else if( sd->bg_id ) {
-		std::shared_ptr<s_battleground_data> bg = util::umap_find(bg_team_db, sd->bg_id);
-
-		if (bg) {
-			if (bg->cemetery.map > 0) { // Respawn by BG
-				sd->respawn_tid = add_timer(tick + 1000, pc_respawn_timer, sd->bl.id, 0);
-				return 1|8;
-			}
+		struct battleground_data *bg = bg_team_search(sd->bg_id);
+		if( bg && bg->mapindex > 0 ) { // Respawn by BG
+			sd->respawn_tid = add_timer(tick+1000, pc_respawn_timer, sd->bl.id, 0);
+			return 1|8;
 		}
 	}
 
@@ -9221,6 +9259,8 @@ int pc_itemheal(struct map_session_data *sd, t_itemid itemid, int hp, int sp)
 		tmp = hp * bonus / 100; // Overflow check
 		if (bonus != 100 && tmp > hp)
 			hp = tmp;
+		if( map_getmapflag(sd->bl.m, MF_BATTLEGROUND) && sd->bg_id )
+			add2limit(sd->status.bgstats.hp_heal_potions, 1, UINT_MAX);
 	}
 	if (sp) {
 		bonus = 100 + (sd->battle_status.int_ << 1) + pc_checkskill(sd, MG_SRECOVERY) * 10 + pc_checkskill(sd, AM_LEARNINGPOTION) * 5;
@@ -9231,6 +9271,8 @@ int pc_itemheal(struct map_session_data *sd, t_itemid itemid, int hp, int sp)
 		tmp = sp * bonus / 100; // Overflow check
 		if (bonus != 100 && tmp > sp)
 			sp = tmp;
+		if( map_getmapflag(sd->bl.m, MF_BATTLEGROUND) && sd->bg_id )
+			add2limit(sd->status.bgstats.sp_heal_potions, 1, UINT_MAX);
 	}
 	if (sd->sc.count) {
 		// Critical Wound and Death Hurt stack
@@ -9821,6 +9863,12 @@ bool pc_candrop(struct map_session_data *sd, struct item *item)
 		return false;
 	if( !pc_can_give_items(sd) || sd->sc.cant.drop) //check if this GM level can drop items
 		return false;
+	if( item->card[0] == CARD0_CREATE) {
+		if (MakeDWord(item->card[2], item->card[3]) == battle_config.bg_reserved_char_id)
+			return false;
+		if (MakeDWord(item->card[2], item->card[3]) == battle_config.woe_reserved_char_id)
+			return false;
+	}
 	return (itemdb_isdropable(item, pc_get_group_level(sd)));
 }
 
@@ -13493,6 +13541,27 @@ void pc_set_costume_view(struct map_session_data *sd) {
 		clif_changelook(&sd->bl, LOOK_ROBE, sd->status.robe);
 }
 
+/***********************************************************
+* Update Idle PC Timer
+***********************************************************/
+int pc_update_last_action(struct map_session_data *sd)
+{
+	struct battleground_data *bgd;
+	int64 tick = gettick();
+
+	sd->idletime = last_tick;
+
+	if (sd->bg_id && sd->state.bg_afk && (bgd = bg_team_search(sd->bg_id)) != NULL && bgd->g)
+	{ // Battleground AFK announce
+		char output[128];
+		sprintf(output, "%s : %s is no longer away...", bgd->g->name, sd->status.name);
+		clif_bg_message(bgd, bgd->bg_id, bgd->g->name, output, strlen(output) + 1);
+		sd->state.bg_afk = 0;
+	}
+
+	return 1;
+}
+
 std::shared_ptr<s_attendance_period> pc_attendance_period(){
 	uint32 date = date_get(DT_YYYYMMDD);
 
@@ -13603,6 +13672,376 @@ void pc_attendance_claim_reward( struct map_session_data* sd ){
 	clif_attendence_response( sd, attendance_counter );
 }
 
+void pc_record_mobkills(struct map_session_data *sd, struct mob_data *md)
+{
+	int type = 0;
+
+	if (!sd) return;
+
+	if( sd->guild && map_flag_gvg2(sd->bl.m)) {
+		switch(md->mob_id) {
+		case MOBID_EMPERIUM:
+			pc_addwoepoints(sd,100);
+			add2limit(sd->status.wstats.emperium_kill, 1, USHRT_MAX);
+			break;
+		case 1905:
+			pc_addwoepoints(sd,5);
+			add2limit(sd->status.wstats.barricade_kill, 1, USHRT_MAX);
+			break;
+		case MOBID_GUARDIAN_STONE1:
+		case MOBID_GUARDIAN_STONE2:
+			pc_addwoepoints(sd,10);
+			add2limit(sd->status.wstats.gstone_kill, 1, USHRT_MAX);
+			break;
+		case 1285:
+		case 1286:
+		case 1287:
+		case 1899:
+		case 1900:
+			pc_addwoepoints(sd,10);
+			add2limit(sd->status.wstats.guardian_kill, 1, USHRT_MAX);
+			break;
+		}
+	}
+	else if (sd->bg_id && map_getmapflag(sd->bl.m, MF_BATTLEGROUND)) {
+		switch(md->mob_id) {
+		case 2100:
+		case 2101:
+		case 2102:
+		case 2103:
+		case 2104:
+			add2limit(sd->status.bgstats.boss_killed, 1, USHRT_MAX);
+			pc_addbgpoints(sd,25);
+			break;
+		case 20400:
+		case 20401:
+			add2limit(sd->status.bgstats.gstone_kill, 1, USHRT_MAX);
+			pc_addbgpoints(sd,10);
+			break;
+		case 20402:
+			add2limit(sd->status.bgstats.ru_captures, 1, USHRT_MAX);
+			add2limit(sd->status.bgstats.emperium_kill, 1, USHRT_MAX);
+			pc_addbgpoints(sd,30);
+			break;
+		case 1911:
+			if (!strcmpi(map[sd->bl.m].name,"bat_a03") ) {
+				add2limit(sd->status.bgstats.boss_flags, 1, USHRT_MAX);
+				pc_addbgpoints(sd,5);
+			}
+			break;
+		case 1906:
+			if (strcmpi(map[sd->bl.m].name,"bat_a01")) {
+				add2limit(sd->status.bgstats.barricade_kill, 1, USHRT_MAX);
+				pc_addbgpoints(sd,1);
+			}
+			break;
+		}
+	}
+}
+
+void pc_record_damage(struct block_list *src, struct block_list *target, int damage)
+{
+	struct block_list *s_bl;
+	struct map_session_data *sd;
+
+	if (!src || !target || src == target || damage <= 0)
+		return;
+
+	if ((s_bl = battle_get_master(src)) == NULL)
+		s_bl = src;
+
+	if (s_bl->type != BL_PC)
+		return;
+
+	sd = BL_CAST(BL_PC, s_bl);
+
+	switch(target->type) {
+		case BL_PC:
+			if (sd->bg_id && map_getmapflag(src->m, MF_BATTLEGROUND)) {
+				add2limit(sd->status.bgstats.damage_done, damage, UINT_MAX);
+				add2limit(((TBL_PC*)target)->status.bgstats.damage_received, damage, UINT_MAX);
+				if (sd->status.bgstats.top_damage < damage)
+					sd->status.bgstats.top_damage = damage;
+			}
+			else if (map_flag_gvg2(src->m)) {
+				add2limit(sd->status.wstats.damage_done, damage, UINT_MAX);
+				add2limit(((TBL_PC*)target)->status.wstats.damage_received, damage, UINT_MAX);
+				if (sd->status.wstats.top_damage < damage)
+					sd->status.wstats.top_damage = damage;
+			}
+			break;
+		case BL_MOB: {
+			struct mob_data *md = BL_CAST(BL_MOB, target);
+			if (sd->bg_id && map_getmapflag(src->m, MF_BATTLEGROUND) && md->mob_id >= 2100 && md->mob_id <= 2104 )
+				add2limit(sd->status.bgstats.boss_damage, damage, UINT_MAX);
+			else if (map_flag_gvg2(src->m) && md->guardian_data) {
+				switch(md->mob_id) {
+					case MOBID_EMPERIUM:
+						add2limit(sd->status.wstats.emperium_damage, damage, UINT_MAX);
+						break;
+					case 1905:
+						add2limit(sd->status.wstats.barricade_damage, damage, UINT_MAX);
+						break;
+					case MOBID_GUARDIAN_STONE1:
+					case MOBID_GUARDIAN_STONE2:
+						add2limit(sd->status.wstats.gstone_damage, damage, UINT_MAX);
+						break;
+					default:
+						add2limit(sd->status.wstats.guardian_damage, damage, UINT_MAX);
+						break;
+				}
+			}
+			break;
+		}
+	}
+}
+
+void pc_rank_reward(int position, int type)
+{
+	if (position > MAX_FAME_LIST)
+		return;
+	
+	struct mail_message msg;
+
+	memset( &msg, 0, sizeof( struct mail_message ) );
+
+	// Battleground Rewards
+	if (RANK_BG) {
+		safestrncpy(msg.dest_name,bg_fame_list[position].name, NAME_LENGTH);
+		safesnprintf( msg.title, MAIL_TITLE_LENGTH, "BG Rank Rewards");
+		safesnprintf( msg.body, MAIL_BODY_LENGTH, "You have been rewarded by your Rank #%d in Battleground", position+1 );
+
+		msg.item[0].nameid = bgr[position].nameid;
+		msg.item[0].amount = bgr[position].amount;
+		msg.zeny = bgr[position].zeny;
+	}
+	// War of Emperium Rewards
+	else if (RANK_WOE) {
+		safestrncpy(msg.dest_name,woe_fame_list[position].name, NAME_LENGTH);
+		safesnprintf( msg.title, MAIL_TITLE_LENGTH, "WoE Rank Rewards");
+		safesnprintf( msg.body, MAIL_BODY_LENGTH, "You have been rewarded by your Rank #%d in War of Emperium", position+1 );
+
+		msg.item[0].nameid = woer[position].nameid;
+		msg.item[0].amount = woer[position].amount;
+		msg.zeny = woer[position].zeny;
+	}
+	safestrncpy(msg.send_name, "Server", NAME_LENGTH );
+	msg.item[0].identify = 1;
+
+	msg.status = MAIL_NEW;
+	msg.type = MAIL_INBOX_NORMAL;
+	msg.timestamp = time(NULL);
+
+	intif_Mail_send(0, &msg);
+}
+
+void pc_rank_reset(int type, bool reward)
+{
+	struct map_session_data *sd = NULL;
+	struct s_mapiterator* iter = NULL;
+	int i;
+
+	if (reward)
+		for( i = 0; i < MAX_FAME_LIST; i++ )
+		{
+			if (!bg_fame_list[i].id)
+				continue;
+			else
+				pc_rank_reward(i, RANK_BG);
+		}
+
+	iter = mapit_getallusers();
+	for (sd = (TBL_PC*)mapit_first(iter); mapit_exists(iter); sd = (TBL_PC*)mapit_next(iter))	
+	{
+		switch(type) {
+			case RANK_BG: // Battleground Stats}
+				sd->status.bgstats.points = 0;
+				chrif_save(sd, CSAVE_NORMAL);
+				break;
+			case RANK_WOE: // WoE Ranking Reset
+				sd->status.wstats.points = 0;
+				chrif_save(sd, CSAVE_NORMAL);
+				break;
+		}
+	}
+	mapit_free(iter);
+
+	switch(type) {
+		case RANK_BG:
+			if( SQL_ERROR == Sql_Query(mmysql_handle, "UPDATE `char_bg` SET `points` = '0'") )
+				Sql_ShowDebug(mmysql_handle);
+			break;
+		case RANK_WOE:
+			if( SQL_ERROR == Sql_Query(mmysql_handle, "UPDATE `char_wstats` SET `points` = '0'") )
+				Sql_ShowDebug(mmysql_handle);
+			break;
+	}
+
+	chrif_buildfamelist();
+}
+
+void pc_battle_stats(struct map_session_data *sd, struct map_session_data *tsd, int flag)
+{
+	if (!sd || !tsd)
+		return;
+	char output[CHAT_SIZE_MAX];
+
+	// Battleground Stats
+	if (flag == 1) {
+		if (sd != tsd && tsd->status.bgstats.showstats) {
+			clif_displaymessage(sd->fd, "Player doesn not allow to show this information");
+			return;
+		}
+		clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "============ BATTLEGROUND STATS ============", false, SELF);
+		sprintf(output, "    Name: %s (%s)", tsd->status.name,job_name(tsd->status.class_)); clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		if (pc_famerank(tsd->status.char_id,-1))
+			sprintf(output, "    Rank: %d    -    Points: %d", pc_famerank(tsd->status.char_id,-1),tsd->status.bgstats.points);
+		else
+			sprintf(output, "    Rank: N/A    -    Points: %d",tsd->status.bgstats.points);
+		clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		sprintf(output, "    Wins: %d    -    Lost: %d    -    Draw: %d",tsd->status.bgstats.win,tsd->status.bgstats.lost,tsd->status.bgstats.tie);
+		clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		sprintf(output, "    Kills: %d    -    Deaths: %d", tsd->status.bgstats.kill_count, tsd->status.bgstats.death_count);
+		clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		sprintf(output, "    Damage dealt: %d    -    Top damage: %d", tsd->status.bgstats.damage_done,tsd->status.bgstats.top_damage);
+		clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		sprintf(output, "    Damage received: %d    -    Healing done: %d", tsd->status.bgstats.damage_received, tsd->status.bgstats.healing_done);
+		clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		sprintf(output, "    Deserter times: %d", tsd->status.bgstats.deserter);
+		clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		sprintf(output, "    HP Potions: %d    -    SP Potions: %d", tsd->status.bgstats.hp_heal_potions, tsd->status.bgstats.sp_heal_potions);
+		clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		sprintf(output, "    SP used: %d", tsd->status.bgstats.sp_used);
+		clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		if (tsd->status.bgstats.yellow_gemstones || tsd->status.bgstats.red_gemstones|| tsd->status.bgstats.blue_gemstones) {
+			sprintf(output, "    Yellow G.: %d    -    Red G.: %d    -    Blue G.: %d", tsd->status.bgstats.yellow_gemstones, tsd->status.bgstats.red_gemstones, tsd->status.bgstats.blue_gemstones);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.poison_bottles) {
+			sprintf(output, "    Poison Bottles: %d", tsd->status.bgstats.poison_bottles);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.zeny_used || tsd->status.bgstats.spiritb_used || tsd->status.bgstats.ammo_used) {
+			sprintf(output, "    Zeny used: %d    -    Spirit Ball: %d    -    Ammo used: %d", tsd->status.bgstats.zeny_used, tsd->status.bgstats.spiritb_used, tsd->status.bgstats.ammo_used);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.leader_win || tsd->status.bgstats.leader_lost || tsd->status.bgstats.leader_tie) {
+			sprintf(output, "    Leader wins: %d    -    Leader lost: %d    -    Leader draw: %d", tsd->status.bgstats.leader_win, tsd->status.bgstats.leader_lost, tsd->status.bgstats.leader_tie);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.ti_wins || tsd->status.bgstats.ti_lost || tsd->status.bgstats.ti_tie) {
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "___________ Triple Inferno ___________", false, SELF);
+			sprintf(output, "    Wins: %d    -    Lost: %d    -    Draw: %d", tsd->status.bgstats.ti_wins, tsd->status.bgstats.ti_lost, tsd->status.bgstats.ti_tie);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Skulls (points): %d", tsd->status.bgstats.skulls);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.eos_wins || tsd->status.bgstats.eos_lost || tsd->status.bgstats.eos_tie) {
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "___________ Eye of the Storm ___________", false, SELF);
+			sprintf(output, "    Wins: %d    -    Lost: %d    -    Draw: %d", tsd->status.bgstats.eos_wins, tsd->status.bgstats.eos_lost, tsd->status.bgstats.eos_tie);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Flags: %d    -    Bases: %d", tsd->status.bgstats.eos_flags, tsd->status.bgstats.eos_bases);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.boss_wins || tsd->status.bgstats.boss_lost || tsd->status.bgstats.boss_tie) {
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "___________ Tierra Bossnia ___________", false, SELF);
+			sprintf(output, "    Wins: %d    -    Lost: %d    -    Draw: %d", tsd->status.bgstats.boss_wins, tsd->status.bgstats.boss_lost, tsd->status.bgstats.boss_tie);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Boss kills: %d    -    Boss damage: %d    -    Flags: %d", tsd->status.bgstats.boss_killed, tsd->status.bgstats.eos_bases, tsd->status.bgstats.boss_flags);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.td_wins || tsd->status.bgstats.td_lost || tsd->status.bgstats.td_tie) {
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "___________ Team Deathmatch ___________", false, SELF);
+			sprintf(output, "    Wins: %d    -    Lost: %d    -    Draw: %d", tsd->status.bgstats.td_wins, tsd->status.bgstats.td_lost, tsd->status.bgstats.td_tie);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Kills: %d    -    Deaths: %d", tsd->status.bgstats.td_kills, tsd->status.bgstats.td_deaths);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.dom_wins || tsd->status.bgstats.dom_lost || tsd->status.bgstats.dom_tie) {
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "___________ Domination ___________", false, SELF);
+			sprintf(output, "    Wins: %d    -    Lost: %d    -    Draw: %d", tsd->status.bgstats.dom_wins, tsd->status.bgstats.dom_lost, tsd->status.bgstats.dom_tie);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Offensive Kills: %d    -    Defensive Kills: %d", tsd->status.bgstats.dom_off_kills, tsd->status.bgstats.dom_def_kills);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Bases: %d", tsd->status.bgstats.dom_bases);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.sc_wins || tsd->status.bgstats.sc_lost || tsd->status.bgstats.sc_tie) {
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "___________ Stone Control ___________", false, SELF);
+			sprintf(output, "    Wins: %d    -    Lost: %d    -    Draw: %d", tsd->status.bgstats.sc_wins, tsd->status.bgstats.sc_lost, tsd->status.bgstats.sc_tie);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Captures: %d    -    Stone Stolen: %d-    Stone Dropped: %d", tsd->status.bgstats.sc_captured, tsd->status.bgstats.sc_stole, tsd->status.bgstats.sc_droped);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.ctf_wins || tsd->status.bgstats.ctf_lost || tsd->status.bgstats.ctf_tie) {
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "___________ Capture the Flag ___________", false, SELF);
+			sprintf(output, "    Wins: %d    -    Lost: %d    -    Draw: %d", tsd->status.bgstats.ctf_wins, tsd->status.bgstats.ctf_lost, tsd->status.bgstats.ctf_tie);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Flag captures: %d    -    Flag taken: %d    -    Flag Dropped: %d", tsd->status.bgstats.ctf_captured, tsd->status.bgstats.ctf_taken, tsd->status.bgstats.ctf_droped);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.cq_wins || tsd->status.bgstats.cq_lost) {
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "___________ Conquest ___________", false, SELF);
+			sprintf(output, "    Wins: %d    -    Lost: %d", tsd->status.bgstats.cq_wins, tsd->status.bgstats.cq_lost);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Emperium kills: %d    -    Barricade Kills: %d", tsd->status.bgstats.emperium_kill, tsd->status.bgstats.barricade_kill);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Guardian Stone kills: %d", tsd->status.bgstats.gstone_kill);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+		if (tsd->status.bgstats.ru_wins || tsd->status.bgstats.ru_lost) {
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], "___________ Rush ___________", false, SELF);
+			sprintf(output, "    Wins: %d    -    Lost: %d", tsd->status.bgstats.ru_wins, tsd->status.bgstats.ru_lost);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+			sprintf(output, "    Captures: %d", tsd->status.bgstats.ru_captures);
+			clif_messagecolor(&sd->bl, color_table[COLOR_LIGHT_GREEN], output, false, SELF);
+		}
+	// War of Emperium Stats
+	} else {
+		if (sd != tsd && tsd->status.wstats.showstats) {
+			clif_displaymessage(sd->fd, "Player doesn not allow to show this information");
+			return;
+		}
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], "============ WAR OF EMPERIUM STATS ============", false, SELF);
+		sprintf(output, "    Name: %s (%s)", tsd->status.name,job_name(tsd->status.class_));
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		if (pc_famerank(tsd->status.char_id,-2))
+			sprintf(output, "    Rank: %d    -    Points: %d", pc_famerank(tsd->status.char_id,-2),tsd->status.bgstats.points);
+		else
+			sprintf(output, "    Rank: N/A    -    Points: %d",tsd->status.bgstats.points);
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		sprintf(output, "    Wins: %d    -    Lost: %d    -    Draw: %d",tsd->status.bgstats.win,tsd->status.bgstats.lost,tsd->status.bgstats.tie);
+		sprintf(output, "    Kills: %d    -    Deaths: %d", tsd->status.wstats.kill_count, tsd->status.wstats.death_count);
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		sprintf(output, "    Damage dealt: %d    -    Top damage: %d", tsd->status.wstats.damage_done,tsd->status.wstats.top_damage);
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		sprintf(output, "    Damage received: %d    -    Healing done: %d", tsd->status.wstats.damage_received, tsd->status.wstats.healing_done);
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		sprintf(output, "    HP Potions: %d    -    SP Potions: %d", tsd->status.wstats.hp_heal_potions, tsd->status.wstats.sp_heal_potions);
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		sprintf(output, "    SP used: %d", tsd->status.wstats.sp_used);
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		sprintf(output, "    Emperium kills: %d    -    Emperium damage: %d", tsd->status.wstats.emperium_kill, tsd->status.wstats.emperium_damage);
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		sprintf(output, "    Barricade kills: %d    -    Barricade damage: %d", tsd->status.wstats.barricade_kill, tsd->status.wstats.barricade_damage);
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		sprintf(output, "    Guardian kills: %d    -    Guardian damage: %d", tsd->status.wstats.guardian_kill, tsd->status.wstats.guardian_damage);
+		clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		if (tsd->status.wstats.yellow_gemstones || tsd->status.wstats.red_gemstones|| tsd->status.wstats.blue_gemstones) {
+			sprintf(output, "    Yellow G.: %d    -    Red G.: %d    -    Blue G.: %d", tsd->status.wstats.yellow_gemstones, tsd->status.wstats.red_gemstones, tsd->status.wstats.blue_gemstones);
+			clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		}
+		if (tsd->status.wstats.poison_bottles) {
+			sprintf(output, "    Poison Bottles: %d", tsd->status.wstats.poison_bottles);
+			clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		}
+		if (tsd->status.wstats.zeny_used || tsd->status.wstats.spiritb_used || tsd->status.wstats.ammo_used) {
+			sprintf(output, "    Zeny used: %d    -    Spirit Ball: %d    -    Ammo used: %d", tsd->status.wstats.zeny_used, tsd->status.wstats.spiritb_used, tsd->status.wstats.ammo_used);
+			clif_messagecolor(&sd->bl, color_table[COLOR_CYAN], output, false, SELF);
+		}
+	}
+}
+
 /*==========================================
  * pc Init/Terminate
  *------------------------------------------*/
@@ -13638,7 +14077,6 @@ void do_init_pc(void) {
 	add_timer_func_list(pc_global_expiration_timer, "pc_global_expiration_timer");
 	add_timer_func_list(pc_expiration_timer, "pc_expiration_timer");
 	add_timer_func_list(pc_autotrade_timer, "pc_autotrade_timer");
-	add_timer_func_list(pc_on_expire_active, "pc_on_expire_active");
 
 	add_timer(gettick() + autosave_interval, pc_autosave, 0, 0);
 

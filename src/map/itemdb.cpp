@@ -28,11 +28,91 @@ static std::map<uint32, std::shared_ptr<s_item_combo>> itemdb_combo; /// Item Co
 static DBMap *itemdb_group; /// Item Group DB
 
 struct s_roulette_db rd;
+struct s_bg_reward bgr[MAX_FAME_LIST];
+struct s_woe_reward woer[MAX_FAME_LIST];
 
 static void itemdb_jobid2mapid(uint64 bclass[3], e_mapid jobmask, bool active);
 
 const std::string ItemDatabase::getDefaultLocation() {
 	return std::string(db_path) + "/item_db.yml";
+}
+
+/**
+* BG Reward read db
+**/
+static bool itemdb_read_bgreward(char* fields[], int columns, int current)
+{
+	struct item_data* id;
+	unsigned short nameid, amount;
+	int zeny;
+
+	nameid = atoi(fields[0]);
+	amount = atoi(fields[1]);
+	zeny = atoi(fields[2]);
+
+	if ((id = itemdb_exists(nameid)) == NULL)
+	{
+		ShowWarning("itemdb_read_bgreward: Invalid item id %hu.\n", nameid);
+		return false;
+	}
+
+	if (amount <= 0)
+	{
+		ShowWarning("itemdb_read_bgreward: Invalid item amount %hu.\n", amount);
+		return false;
+	}
+
+	if (zeny < 0)
+	{
+		ShowWarning("itemdb_read_bgreward: Invalid zeny amount %hu.\n", zeny);
+		return false;
+	}
+		
+
+	bgr[current].nameid = nameid;
+	bgr[current].amount = amount;
+	bgr[current].zeny = zeny;
+
+	return true;
+}
+
+/**
+* WoE Reward read db
+**/
+static bool itemdb_read_woereward(char* fields[], int columns, int current)
+{
+	struct item_data* id;
+	unsigned short nameid, amount;
+	int zeny;
+
+	nameid = atoi(fields[0]);
+	amount = atoi(fields[1]);
+	zeny = atoi(fields[2]);
+
+	if ((id = itemdb_exists(nameid)) == NULL)
+	{
+		ShowWarning("itemdb_read_woereward: Invalid item id %hu.\n", nameid);
+		return false;
+	}
+
+	if (amount <= 0)
+	{
+		ShowWarning("itemdb_read_woereward: Invalid item amount %hu.\n", amount);
+		return false;
+	}
+
+	if (zeny < 0)
+	{
+		ShowWarning("itemdb_read_woereward: Invalid zeny amount %hu.\n", zeny);
+		return false;
+	}
+		
+
+	woer[current].nameid = nameid;
+	woer[current].amount = amount;
+	woer[current].zeny = zeny;
+
+	return true;
 }
 
 /**
@@ -2654,6 +2734,8 @@ static void itemdb_read(void) {
 		sv_readdb(dbsubpath1, "item_findingore.txt",	',', 2, 10, -1, &itemdb_read_group, i > 0);
 		sv_readdb(dbsubpath2, "item_giftbox.txt",		',', 2, 10, -1, &itemdb_read_group, i > 0);
 		sv_readdb(dbsubpath2, "item_misc.txt",			',', 2, 10, -1, &itemdb_read_group, i > 0);
+		sv_readdb(dbsubpath1, "bg_rewards.txt",			',', 3, 3, MAX_FAME_LIST, &itemdb_read_bgreward, i > 0);
+		sv_readdb(dbsubpath1, "woe_rewards.txt",		',', 3, 3, MAX_FAME_LIST, &itemdb_read_woereward, i > 0);
 #ifdef RENEWAL
 		sv_readdb(dbsubpath2, "item_package.txt",		',', 2, 10, -1, &itemdb_read_group, i > 0);
 #endif
@@ -2727,6 +2809,8 @@ void itemdb_reload(void) {
 	struct map_session_data* sd;
 
 	item_db.clear();
+	memset(bgr, 0, sizeof(bgr));
+	memset(woer, 0, sizeof(woer));
 	itemdb_combo.clear();
 	itemdb_group->clear(itemdb_group, itemdb_group_free);
 	random_option_db.clear();

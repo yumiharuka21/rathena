@@ -60,6 +60,7 @@ enum item_itemid : t_itemid
 	ITEMID_POISON_BOTTLE				= 678,
 	ITEMID_EMPTY_BOTTLE					= 713,
 	ITEMID_EMPERIUM						= 714,
+	ITEMID_YELLOW_GEMSTONE				= 715,
 	ITEMID_RED_GEMSTONE					= 716,
 	ITEMID_BLUE_GEMSTONE				= 717,
 	ITEMID_ORIDECON_STONE				= 756,
@@ -845,6 +846,20 @@ struct s_roulette_db {
 	int items[MAX_ROULETTE_LEVEL]; /// Number of items in the list for each
 };
 extern struct s_roulette_db rd;
+
+/// Struct of BG Reward db
+struct s_bg_reward {
+	unsigned short nameid, amount;
+	int zeny;
+};
+extern struct s_bg_reward bgr[MAX_FAME_LIST];
+
+/// Struct of WoE Reward db
+struct s_woe_reward {
+	unsigned short nameid, amount;
+	int zeny;
+};
+extern struct s_woe_reward woer[MAX_FAME_LIST];
 
 ///Main item data struct
 struct item_data

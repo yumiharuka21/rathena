@@ -1808,34 +1808,6 @@ int64 battle_calc_damage(struct block_list *src,struct block_list *bl,struct Dam
 }
 
 /**
- * Determines whether battleground target can be hit
- * @param src: Source of attack
- * @param bl: Target of attack
- * @param skill_id: Skill ID used
- * @param flag: Special flags
- * @return Can be hit (true) or can't be hit (false)
- */
-bool battle_can_hit_bg_target(struct block_list *src, struct block_list *bl, uint16 skill_id, int flag)
-{
-	struct mob_data* md = BL_CAST(BL_MOB, bl);
-	struct unit_data *ud = unit_bl2ud(bl);
-
-	if (ud && ud->immune_attack)
-		return false;
-	if (md && md->bg_id) {
-		if (status_bl_has_mode(bl, MD_SKILLIMMUNE) && flag&BF_SKILL) //Skill immunity.
-			return false;
-		if (src->type == BL_PC) {
-			struct map_session_data *sd = map_id2sd(src->id);
-
-			if (sd && sd->bg_id == md->bg_id)
-				return false;
-		}
-	}
-	return true;
-}
-
-/**
  * Calculates BG related damage adjustments.
  * @param src
  * @param bl
@@ -1851,9 +1823,6 @@ bool battle_can_hit_bg_target(struct block_list *src, struct block_list *bl, uin
 int64 battle_calc_bg_damage(struct block_list *src, struct block_list *bl, int64 damage, uint16 skill_id, int flag)
 {
 	if( !damage )
-		return 0;
-
-	if (!battle_can_hit_bg_target(src, bl, skill_id, flag))
 		return 0;
 
 	if(skill_get_inf2(skill_id, INF2_IGNOREBGREDUCTION))
@@ -2518,10 +2487,13 @@ int battle_calc_chorusbonus(struct map_session_data *sd) {
 
 	int members = 0;
 
-	if (!sd || !sd->status.party_id)
+	if (!sd || (!sd->status.party_id && !sd->bg_id))
 		return 0;
 
-	members = party_foreachsamemap(party_sub_count_class, sd, 0, MAPID_THIRDMASK, MAPID_MINSTRELWANDERER);
+	if (battle_config.bg_party_skills && sd->bg_id)
+		members = bg_team_foreachsamemap(party_sub_count_class, sd, 0, MAPID_THIRDMASK, MAPID_MINSTRELWANDERER);
+	else
+		members = party_foreachsamemap(party_sub_count_class, sd, 0, MAPID_THIRDMASK, MAPID_MINSTRELWANDERER);
 
 	if (members < 3)
 		return 0; // Bonus remains 0 unless 3 or more Minstrels/Wanderers are in the party.
@@ -8465,6 +8437,8 @@ int battle_check_target( struct block_list *src, struct block_list *target,int f
 		{
 			sbg_id = bg_team_get_id(s_bl);
 			tbg_id = bg_team_get_id(t_bl);
+			if (battle_config.bg_party_skills && flag&(BCT_PARTY) && sbg_id == tbg_id)
+				state |= BCT_PARTY;
 		}
 		if( flag&(BCT_PARTY|BCT_ENEMY) )
 		{
@@ -9111,8 +9085,6 @@ static const struct _battle_data {
 	{ "hom_idle_no_share",                  &battle_config.hom_idle_no_share,               0,      0,      INT_MAX,        },
 	{ "idletime_hom_option",                &battle_config.idletime_hom_option,             0x1F,   0x1,    0xFFF,          },
 	{ "devotion_standup_fix",               &battle_config.devotion_standup_fix,            1,      0,      1,              },
-	{ "feature.bgqueue",                    &battle_config.feature_bgqueue,                 1,      0,      1,              },
-	{ "bgqueue_nowarp_mapflag",             &battle_config.bgqueue_nowarp_mapflag,          0,      0,      1,              },
 	{ "homunculus_exp_gain",                &battle_config.homunculus_exp_gain,             10,     0,      100,            },
 	{ "rental_item_novalue",                &battle_config.rental_item_novalue,             1,      0,      1,              },
 	{ "ping_timer_inverval",                &battle_config.ping_timer_interval,             30,     0,      99999999,       },
@@ -9214,13 +9186,6 @@ void battle_adjust_conf()
 	if (battle_config.feature_search_stores) {
 		ShowWarning("conf/battle/feature.conf:search_stores is enabled but it requires PACKETVER 2010-08-03 or newer, disabling...\n");
 		battle_config.feature_search_stores = 0;
-	}
-#endif
-
-#if PACKETVER < 20120101
-	if (battle_config.feature_bgqueue) {
-		ShowWarning("conf/battle/feature.conf:bgqueue is enabled but it requires PACKETVER 2012-01-01 or newer, disabling...\n");
-		battle_config.feature_bgqueue = 0;
 	}
 #endif
 

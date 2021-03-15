@@ -595,6 +595,10 @@ enum e_mapflag : int16 {
 	MF_PRIVATEAIRSHIP_SOURCE,
 	MF_PRIVATEAIRSHIP_DESTINATION,
 	MF_SKILL_DURATION,
+	MF_NOECALL, // Disallow Emergency Call
+	MF_BG_CONSUME, // Allow using BG consumables
+	MF_WOE_CONSUME, // Allow using WoE consumables
+	MF_BG_TOPSCORE,
 	MF_MAX
 };
 
@@ -723,7 +727,7 @@ struct map_data {
 	int16 m;
 	int16 xs,ys; // map dimensions (in cells)
 	int16 bxs,bys; // map dimensions (in blocks)
-	int16 bgscore_lion, bgscore_eagle; // Battleground ScoreBoard
+	int16 bgscore_lion, bgscore_eagle, bgscore_top; // Battleground ScoreBoard
 	int npc_num; // number total of npc on the map
 	int npc_num_area; // number of npc with a trigger area on the map
 	int npc_num_warp; // number of warp npc on the map
