@@ -10723,6 +10723,11 @@ void clif_parse_LoadEndAck(int fd,struct map_session_data *sd)
 		if (!sd->state.autotrade) { // Don't trigger NPC event or opening vending/buyingstore will be failed
 			//Login Event
 			npc_script_event(sd, NPCE_LOGIN);
+#ifdef VIP_ENABLE
+			status_change_end(&sd->bl, SC_VIPSTATE, INVALID_TIMER);
+			if(sd->vip.time > 0)
+				sc_start(NULL, &sd->bl, SC_VIPSTATE, 100, 1, (sd->vip.time-time(NULL)) * 1000);
+#endif
 		}
 	} else {
 		//For some reason the client "loses" these on warp/map-change.

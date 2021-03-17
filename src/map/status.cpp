@@ -1411,7 +1411,8 @@ void initChangeTables(void)
 #else
 	StatusIconChangeTable[SC_MADOGEAR] = EFST_RIDING;
 #endif
-
+	StatusIconChangeTable[SC_VIPSTATE] = EFST_VIPSTATE;
+	
 	/* Other SC which are not necessarily associated to skills */
 	StatusChangeFlagTable[SC_ASPDPOTION0] |= SCB_ASPD;
 	StatusChangeFlagTable[SC_ASPDPOTION1] |= SCB_ASPD;
@@ -1559,6 +1560,8 @@ void initChangeTables(void)
 	StatusChangeFlagTable[SC_CROSSBOWCLAN] |= SCB_DEX|SCB_AGI|SCB_MAXHP|SCB_MAXSP;
 	StatusChangeFlagTable[SC_JUMPINGCLAN] |= SCB_STR|SCB_AGI|SCB_VIT|SCB_INT|SCB_DEX|SCB_LUK;
 
+	StatusChangeFlagTable[SC_VIPSTATE] |= SCB_NONE;
+	
 	// RODEX
 	StatusChangeFlagTable[SC_DAILYSENDMAILCNT] |= SCB_NONE;
 
@@ -12252,6 +12255,7 @@ int status_change_start(struct block_list* src, struct block_list* bl,enum sc_ty
 		case SC_DRESSUP:
 		case SC_MISTY_FROST:
 		case SC_MADOGEAR:
+		case SC_VIPSTATE:
 			val_flag |= 1;
 			break;
 		// Start |1|2 val_flag setting
@@ -12921,6 +12925,7 @@ int status_change_clear(struct block_list* bl, int type)
 			case SC_CROSSBOWCLAN:
 			case SC_JUMPINGCLAN:
 			case SC_DAILYSENDMAILCNT:
+			case SC_VIPSTATE:
 				continue;
 			}
 		}
@@ -12958,6 +12963,7 @@ int status_change_clear(struct block_list* bl, int type)
 			case SC_CROSSBOWCLAN:
 			case SC_JUMPINGCLAN:
 			case SC_DAILYSENDMAILCNT:
+			case SC_VIPSTATE:
 				continue;
 			}
 		}
@@ -15097,6 +15103,7 @@ void status_change_clear_buffs(struct block_list* bl, uint8 type)
 			case SC_MAPLE_FALLS:
 			case SC_TIME_ACCESSORY:
 			case SC_MAGICAL_FEATHER:
+			case SC_VIPSTATE:
 				continue;
 			// Chemical Protection is only removed by some skills
 			case SC_CP_WEAPON:
