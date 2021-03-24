@@ -3769,6 +3769,18 @@ void pc_bonus(struct map_session_data *sd,int type,int val)
 			if (sd->state.lr_flag != 2)
 				sd->special_state.no_walk_delay = 1;
 			break;
+		case SP_HEAL_ABSORB:
+			sd->bonus.heal_absorb = cap_value(sd->bonus.heal_absorb + val, 0, 100);	// uint16
+			break;
+		case SP_REDUCE_ABSORB:
+			sd->bonus.reduce_absorb = cap_value(sd->bonus.reduce_absorb + val, 0, 100);	// uint16
+			break;
+		case SP_FINAL_DAMAGE:
+			sd->bonus.final_damage += val;	// uint32
+			break;
+		case SP_FINAL_DAMAGE_PER:
+			sd->bonus.final_damage2 = cap_value(sd->bonus.final_damage2 + val, 0, 100);	// uint8
+			break;
 		default:
 			if (current_equip_combo_pos > 0) {
 				ShowWarning("pc_bonus: unknown bonus type %d %d in a combo with item #%u\n", type, val, sd->inventory_data[pc_checkequip( sd, current_equip_combo_pos )]->nameid);
@@ -4361,6 +4373,13 @@ void pc_bonus2(struct map_session_data *sd,int type,int type2,int val)
 	case SP_MAGIC_SUBDEF_ELE: // bonus2 bMagicSubDefEle,e,x;
 		PC_BONUS_CHK_ELEMENT(type2, SP_MAGIC_SUBDEF_ELE);
 		sd->indexed_bonus.magic_subdefele[type2] += val;
+		break;
+	case SP_IGNORE_SKILL: // bonus2 bIgnoreSkill,sk,n;
+		if (sd->ignoreskill.size() == MAX_PC_BONUS) {
+			ShowWarning("pc_bonus2: SP_IGNORE_SKILL: Reached max (%d) number of skills per character, bonus skill %d (%d) lost.\n", MAX_PC_BONUS, type2, val);
+			break;
+		}
+		pc_bonus_itembonus(sd->ignoreskill, type2, val, false);
 		break;
 	default:
 		if (current_equip_combo_pos > 0) {
@@ -8171,6 +8190,24 @@ int pc_resethate(struct map_session_data* sd)
 		pc_setglobalreg(sd, add_str(sg_info[i].hate_var), 0);
 	}
 	return 0;
+}
+
+int pc_ignoreskill_bonus(struct map_session_data *sd, uint16 skill_id)
+{
+	int bonus = 0;
+
+	nullpo_ret(sd);
+
+	skill_id = skill_dummy2skill_id(skill_id);
+
+	for (auto &it : sd->ignoreskill) {
+		if (it.id == skill_id) {
+			bonus += it.val;
+			break;
+		}
+	}
+
+	return bonus;
 }
 
 int pc_skillatk_bonus(struct map_session_data *sd, uint16 skill_id)

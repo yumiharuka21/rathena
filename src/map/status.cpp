@@ -1909,6 +1909,42 @@ int64 status_charge(struct block_list* bl, int64 hp, int64 sp)
 }
 
 /**
+* Absorb Damage and heal
+* @param src source of damage
+* @param target bl to receive damage
+* @param damage damage done
+**/
+static void status_absorb(struct block_list *src, struct block_list *target, int damage) {
+	int heal = 0;
+
+	nullpo_retv(src);
+	nullpo_retv(target);
+
+	if (!damage)
+		return;
+
+	if (target->type == BL_PC){
+		struct map_session_data *sd, *tsd;
+		
+		sd = BL_CAST(BL_PC, src);
+		tsd = BL_CAST(BL_PC, target);
+		
+		if (!tsd)
+			return;
+		
+		if (tsd->bonus.heal_absorb){
+			heal = (damage / 10000) * tsd->bonus.heal_absorb;
+			if(sd && sd->bonus.reduce_absorb && heal > 0)
+				heal -= (damage / 10000) * sd->bonus.reduce_absorb;
+			if(heal > 0){
+				int absorbed = static_cast<unsigned int>(cap_value(heal, 0, tsd->status.max_hp));
+				status_heal(target, absorbed, 0, 2);
+			}
+		}
+	}
+}
+
+/**
  * Inflicts damage on the target with the according walkdelay.
  * @param src: Source object giving damage [PC|MOB|PET|HOM|MER|ELEM]
  * @param target: Target of the damage
@@ -2047,6 +2083,8 @@ int status_damage(struct block_list *src,struct block_list *target,int64 dhp, in
 		case BL_MER: mercenary_heal((TBL_MER*)target,hp,sp); break;
 		case BL_ELEM: elemental_heal((TBL_ELEM*)target,hp,sp); break;
 	}
+	
+	if( target->type == BL_PC ) status_absorb(src, target, hp);
 
 	if( src && target->type == BL_PC && ((TBL_PC*)target)->disguise ) { // Stop walking when attacked in disguise to prevent walk-delay bug
 		unit_stop_walking( target, 1 );
@@ -3874,6 +3912,7 @@ int status_calc_pc_sub(struct map_session_data* sd, enum e_status_calc_opt opt)
 	sd->addeff.clear();
 	sd->addeff_atked.clear();
 	sd->addeff_onskill.clear();
+	sd->ignoreskill.clear();
 	sd->skillatk.clear();
 	sd->skillusesprate.clear();
 	sd->skillusesp.clear();

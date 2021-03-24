@@ -1072,6 +1072,31 @@ static void battle_absorb_damage(struct block_list *bl, struct Damage *d) {
 }
 
 /**
+* Add final damage
+* @param bl source of damage
+* @param damage damage done
+**/
+static int64 battle_final_damage(struct block_list* bl, int64 dmgdone) {
+	int64 flat_damage = 0, per_damage = 0;
+	int64 old_damage = dmgdone;
+	
+	nullpo_retv(bl);
+
+	if(bl->type == BL_PC){
+		struct map_session_data *sd = BL_CAST(BL_PC, bl);
+		if (sd) {
+			if(sd->bonus.final_damage)
+				flat_damage = sd->bonus.final_damage;
+			if(sd->bonus.final_damage2)
+				per_damage = (old_damage / 10000) * sd->bonus.final_damage2;
+			dmgdone = old_damage + flat_damage + per_damage;
+		}
+	}
+	
+	return dmgdone;
+}
+
+/**
  * Check for active statuses that block damage
  * @param src: Attacker
  * @param target: Target of attack
@@ -1804,6 +1829,8 @@ int64 battle_calc_damage(struct block_list *src,struct block_list *bl,struct Dam
 			damage = i64max(damage * md->db->damagetaken / 100, 1);
 	}
 
+	if( src && src->type == BL_PC) damage = battle_final_damage(src, damage);
+	
 	return damage;
 }
 

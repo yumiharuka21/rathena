@@ -763,6 +763,11 @@
 	export_constant2("bCritDefRate",SP_CRIT_DEF_RATE);
 	export_constant2("bMagicSubDefEle", SP_MAGIC_SUBDEF_ELE);
 	export_constant2("bReduceDamageReturn",SP_REDUCE_DAMAGE_RETURN);
+	export_constant2("bHealAbsorb",SP_HEAL_ABSORB);
+	export_constant2("bReduceAbsorb",SP_REDUCE_ABSORB);
+	export_constant2("bFinalDamage",SP_FINAL_DAMAGE);
+	export_constant2("bFinalDamage2",SP_FINAL_DAMAGE_PER);
+	export_constant2("bIgnoreSkill",SP_IGNORE_SKILL);
 
 	/* equip indices */
 	export_constant(EQI_COMPOUND_ON);
