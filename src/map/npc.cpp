@@ -4323,7 +4323,17 @@ static const char* npc_parse_mapflag(char* w1, char* w2, char* w3, char* w4, con
 			} else
 				map_setmapflag(m, MF_RESTRICTED, false);
 			break;
+		case MF_SKILL_NOREQUIRE:
+			if (state) {
+				union u_mapflag_args args = {};
 
+				if (sscanf(w4, "%11d", &args.flag_val) == 1)
+					map_setmapflag_sub(m, MF_SKILL_NOREQUIRE, true, &args);
+				else
+					ShowWarning("npc_parse_mapflag: noreqskill value not set for the skill norequire mapflag! Skipped flag from %s (file '%s', line '%d').\n", map_mapid2mapname(m), filepath, strline(buffer,start-buffer));
+			} else
+				map_setmapflag(m, MF_SKILL_NOREQUIRE, false);
+			break;
 		case MF_JEXP:
 		case MF_BEXP: {
 				union u_mapflag_args args = {};

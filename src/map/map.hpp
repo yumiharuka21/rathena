@@ -595,6 +595,7 @@ enum e_mapflag : int16 {
 	MF_PRIVATEAIRSHIP_SOURCE,
 	MF_PRIVATEAIRSHIP_DESTINATION,
 	MF_SKILL_DURATION,
+	MF_SKILL_NOREQUIRE,
 	MF_MAX
 };
 
@@ -619,6 +620,22 @@ struct s_skill_damage {
 struct s_skill_duration {
 	uint16 skill_id; ///< Skill ID
 	uint16 per; ///< Rate
+};
+
+enum e_skill_noreq : uint16 {
+	SKILL_NOREQ_HP     = 0x0001, // 1 - HP cost
+	SKILL_NOREQ_MAXHP  = 0x0002, // 2 - MaxHP trigger
+	SKILL_NOREQ_SP     = 0x0004, // 4 - SP cost
+	SKILL_NOREQ_HPRATE = 0x0008, // 8 - HP rate cost
+	SKILL_NOREQ_SPRATE = 0x0010, // 16 - SP rate cost
+	SKILL_NOREQ_ZENY   = 0x0020, // 32 - Zeny cost
+	SKILL_NOREQ_WEAPON = 0x0040, // 64 - Weapon type
+	SKILL_NOREQ_AMMO   = 0x0080, // 128 - Ammo
+	SKILL_NOREQ_STATE  = 0x0100, // 256 - Required state
+	SKILL_NOREQ_STATUS = 0x0200, // 512 - Required status
+	SKILL_NOREQ_SPIRIT = 0x0400, // 1024 - Spirit sphere
+	SKILL_NOREQ_ITEM   = 0x0800, // 2048 - Required item
+	SKILL_NOREQ_EQUIP  = 0x1000, // 4096 - Required equipment
 };
 
 /// Enum for item drop type for MF_PVP_NIGHTMAREDROP
@@ -735,6 +752,7 @@ struct map_data {
 	struct point save;
 	std::vector<s_drop_list> drop_list;
 	uint32 zone; // zone number (for item/skill restrictions)
+	uint32 noreqskill; // zone number (for skill requirements)
 	struct s_skill_damage damage_adjust; // Used for overall skill damage adjustment
 	std::unordered_map<uint16, s_skill_damage> skill_damage; // Used for single skill damage adjustment
 	std::unordered_map<uint16, int> skill_duration;

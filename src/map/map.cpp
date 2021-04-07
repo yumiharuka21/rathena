@@ -3648,6 +3648,7 @@ void map_flags_init(void){
 
 		// additional mapflag data
 		mapdata->zone = 0; // restricted mapflag zone
+		mapdata->noreqskill = 0; // skill no requirement mapflag zone
 		mapdata->flag[MF_NOCOMMAND] = false; // nocommand mapflag level
 		map_setmapflag_sub(i, MF_BEXP, true, &args); // per map base exp multiplicator
 		map_setmapflag_sub(i, MF_JEXP, true, &args); // per map job exp multiplicator
@@ -4561,6 +4562,8 @@ int map_getmapflag_sub(int16 m, enum e_mapflag mapflag, union u_mapflag_args *ar
 	switch(mapflag) {
 		case MF_RESTRICTED:
 			return mapdata->zone;
+		case MF_SKILL_NOREQUIRE:
+			return mapdata->noreqskill;
 		case MF_NOLOOT:
 			return util::umap_get(mapdata->flag, static_cast<int16>(MF_NOMOBLOOT), 0) && util::umap_get(mapdata->flag, static_cast<int16>(MF_NOMVPLOOT), 0);
 		case MF_NOPENALTY:
@@ -4742,6 +4745,15 @@ bool map_setmapflag_sub(int16 m, enum e_mapflag mapflag, bool status, union u_ma
 				mapdata->zone ^= (1 << (args->flag_val + 1)) << 3;
 			else
 				mapdata->zone |= (1 << (args->flag_val + 1)) << 3;
+			break;
+		case MF_SKILL_NOREQUIRE:
+			nullpo_retr(false, args);
+
+			mapdata->flag[mapflag] = status;
+			if (status && args->flag_val)
+				mapdata->noreqskill = args->flag_val;
+			else
+				mapdata->noreqskill = 0;
 			break;
 		case MF_NOCOMMAND:
 			if (status) {
