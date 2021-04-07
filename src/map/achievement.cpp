@@ -979,6 +979,27 @@ static bool achievement_update_objectives(struct map_session_data *sd, std::shar
 			changed = true;
 			complete = true;
 			break;
+		case AG_BG_WIN:
+		case AG_BG_LOSE:
+		case AG_BG_TIE:
+		case AG_BG_KILL:
+		case AG_BG_DIE:
+		case AG_BG_DAMAGE:
+		case AG_BG_HEAL:
+		case AG_WOE_KILL:
+		case AG_WOE_DIE:
+		case AG_WOE_DAMAGE:
+		case AG_WOE_HEAL:
+			if (group == AG_BG_DAMAGE || group == AG_WOE_DAMAGE)
+				current_count[0] = update_count[0];
+			else
+				current_count[0] += update_count[0];
+			changed = true;			
+			for (const auto &it : ad->targets) {
+				if (current_count[it.first] >= it.second->count)
+					complete = true;
+			}
+			break;
 		case AG_SPEND_ZENY:
 			if (ad->targets.empty() || !ad->condition)
 				return false;

@@ -1948,7 +1948,7 @@
 	parseable_packet(0x08DD,27,clif_parse_dull,2,3);
 	packet(0x08DE,27);
 	packet(0x08DF,50);
-	parseable_packet(0x08E0,51,clif_parse_bg_queue_lobby_reply,2,3,27);
+	//parseable_packet(0x08E0,51,clif_parse_bg_queue_lobby_reply,2,3,27);
 	packet(0x08E1,51);
 	parseable_packet(0x090A,26,clif_parse_bg_queue_request_queue_number,2);
 	packet(0x090E,2);
@@ -2370,6 +2370,7 @@
 	packet(0x0AE2,7);
 	parseable_packet(0x0AEF,2,clif_parse_attendance_request,0);
 	packet(0x0AF0,10);
+	packet(0x0adf,58);  // ZC_ACK_REQNAME_TITLE
 #endif
 
 // 2018-03-21aRagexeRE

@@ -478,6 +478,11 @@
 	export_constant(MF_PRIVATEAIRSHIP_SOURCE);
 	export_constant(MF_PRIVATEAIRSHIP_DESTINATION);
 	export_constant(MF_SKILL_DURATION);
+	// Battleground eAmod
+	export_constant(MF_NOECALL);
+	export_constant(MF_BG_CONSUME);
+	export_constant(MF_WOE_CONSUME);
+	export_constant(MF_BG_TOPSCORE);
 
 	/* setcell types */
 	export_constant(CELL_WALKABLE);
@@ -1563,7 +1568,6 @@
 	export_constant(SC_EARTHSHAKER);
 	export_constant(SC_WEAPONBLOCK_ON);
 	export_constant(SC_ENTRY_QUEUE_APPLY_DELAY);
-	export_constant(SC_ENTRY_QUEUE_NOTIFY_ADMISSION_TIME_OUT);
 	export_constant(SC_ADAPTATION);
 	export_constant(SC_BASILICA_CELL);
 	export_constant(SC_LIGHTOFMOON);
@@ -5233,7 +5237,19 @@
 	export_constant(AG_ENCHANT_SUCCESS);
 	export_constant(AG_SPEND_ZENY);
 	export_constant(AG_TAMING);
-
+	// Extended Features
+	export_constant2("AG_BG_WIN",AG_BG_WIN);
+	export_constant2("AG_BG_LOSE",AG_BG_LOSE);
+	export_constant2("AG_BG_TIE",AG_BG_TIE);
+	export_constant2("AG_BG_KILL",AG_BG_KILL);
+	export_constant2("AG_BG_DIE",AG_BG_DIE);
+	export_constant2("AG_BG_DAMAGE",AG_BG_DAMAGE);
+	export_constant2("AG_BG_HEAL",AG_BG_HEAL);
+	export_constant2("AG_WOE_KILL",AG_WOE_KILL);
+	export_constant2("AG_WOE_DIE",AG_WOE_DIE);
+	export_constant2("AG_WOE_DAMAGE",AG_WOE_DAMAGE);
+	export_constant2("AG_WOE_HEAL",AG_WOE_HEAL);
+	
 	/* achievement info */
 	export_constant(ACHIEVEINFO_COUNT1);
 	export_constant(ACHIEVEINFO_COUNT2);
@@ -8029,15 +8045,6 @@
 	export_constant(UNT_GD_GLORYWOUNDS);
 	export_constant(UNT_GD_SOULCOLD);
 	export_constant(UNT_GD_HAWKEYES);
-
-	/* battleground info types */
-	export_constant(BG_INFO_ID);
-	export_constant(BG_INFO_REQUIRED_PLAYERS);
-	export_constant(BG_INFO_MAX_PLAYERS);
-	export_constant(BG_INFO_MIN_LEVEL);
-	export_constant(BG_INFO_MAX_LEVEL);
-	export_constant(BG_INFO_MAPS);
-	export_constant(BG_INFO_DESERTER_TIME);
 
 	/* item job classes */
 	export_constant(ITEMJ_NORMAL);

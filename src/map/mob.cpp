@@ -1857,6 +1857,8 @@ static bool mob_ai_sub_hard(struct mob_data *md, t_tick tick)
 		if( md->bg_id && mode&MD_CANATTACK ) {
 			if( md->ud.walktimer != INVALID_TIMER )
 				return true;/* we are already moving */
+			if (status_get_class_(&md->bl) == CLASS_BOSS) /* Bossnia Bosses shouldn't follow */
+				return true;
 			map_foreachinallrange (mob_ai_sub_hard_bg_ally, &md->bl, view_range, BL_PC, md, &tbl, mode);
 			if( tbl ) {
 				if( distance_blxy(&md->bl, tbl->x, tbl->y) <= 3 || unit_walktobl(&md->bl, tbl, 1, 1) )
@@ -3091,6 +3093,8 @@ int mob_dead(struct mob_data *md, struct block_list *src, int type)
 			// The master or Mercenary can increase the kill count
 			if (sd->md && src && (src->type == BL_PC || src->type == BL_MER) && mob->lv > sd->status.base_level / 2)
 				mercenary_kills(sd->md);
+			
+			pc_record_mobkills(sd,md);
 		}
 
 		if( md->npc_event[0] && !md->state.npc_killmonster ) {

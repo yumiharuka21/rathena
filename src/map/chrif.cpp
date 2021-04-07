@@ -1205,11 +1205,12 @@ int chrif_disconnectplayer(int fd) {
 /*==========================================
  * Request/Receive top 10 Fame character list
  *------------------------------------------*/
-int chrif_updatefamelist(struct map_session_data* sd) {
+int chrif_updatefamelist(struct map_session_data* sd, int flag) {
 	char type;
 
 	chrif_check(-1);
 
+	if (!flag)
 	switch(sd->class_ & MAPID_UPPERMASK) {
 		case MAPID_BLACKSMITH: type = RANK_BLACKSMITH; break;
 		case MAPID_ALCHEMIST:  type = RANK_ALCHEMIST; break;
@@ -1218,10 +1219,23 @@ int chrif_updatefamelist(struct map_session_data* sd) {
 			return 0;
 	}
 
+	if (flag == 1)
+		type = RANK_BG;
+	else if (flag == 2)
+		type = RANK_WOE;
+	
 	WFIFOHEAD(char_fd, 11);
 	WFIFOW(char_fd,0) = 0x2b10;
 	WFIFOL(char_fd,2) = sd->status.char_id;
-	WFIFOL(char_fd,6) = sd->status.fame;
+	if (!flag)
+		WFIFOL(char_fd,6) = sd->status.fame;
+	else {
+		switch(type) {
+			case RANK_BG: WFIFOL(char_fd,6) = sd->status.bgstats.points; break;
+			case RANK_WOE: WFIFOL(char_fd,6) = sd->status.wstats.points; break;
+			default: WFIFOL(char_fd,6) = sd->status.fame;
+		}
+	}
 	WFIFOB(char_fd,10) = type;
 	WFIFOSET(char_fd,11);
 
@@ -1240,11 +1254,31 @@ int chrif_buildfamelist(void) {
 
 int chrif_recvfamelist(int fd) {
 	int num, size;
-	int total = 0, len = 8;
+	int total = 0, len = 12;
 
 	memset (smith_fame_list, 0, sizeof(smith_fame_list));
 	memset (chemist_fame_list, 0, sizeof(chemist_fame_list));
 	memset (taekwon_fame_list, 0, sizeof(taekwon_fame_list));
+	memset (bg_fame_list, 0, sizeof(bg_fame_list));
+	memset (woe_fame_list, 0, sizeof(woe_fame_list));
+
+	size = RFIFOW(fd,10); //WoE rank block size
+	for( num = 0; len < size && num < MAX_FAME_LIST; num++ )
+	{
+		memcpy(&woe_fame_list[num],RFIFOP(fd,len),sizeof(struct fame_list));
+		len += sizeof(struct fame_list);
+	}
+
+	total += num;
+
+	size = RFIFOW(fd,8); //BG rank block size
+	for( num = 0; len < size && num < MAX_FAME_LIST; num++ )
+	{
+		memcpy(&bg_fame_list[num],RFIFOP(fd,len),sizeof(struct fame_list));
+		len += sizeof(struct fame_list);
+	}
+
+	total += num;
 
 	size = RFIFOW(fd, 6); //Blacksmith block size
 
@@ -1288,6 +1322,8 @@ int chrif_updatefamelist_ack(int fd) {
 		case RANK_BLACKSMITH:	list = smith_fame_list;   break;
 		case RANK_ALCHEMIST:	list = chemist_fame_list; break;
 		case RANK_TAEKWON:		list = taekwon_fame_list; break;
+		case RANK_BG:			list = bg_fame_list;      break;
+		case RANK_WOE:			list = woe_fame_list;      break;
 		default: return 0;
 	}
 
