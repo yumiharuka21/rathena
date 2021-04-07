@@ -17220,6 +17220,26 @@ struct s_skill_condition skill_get_requirement(struct map_session_data* sd, uint
 		}
 	}
 
+	if(sd){
+		struct map_data *mapdata = map_getmapdata(sd->bl.m);
+		
+		if(mapdata->flag[MF_SKILL_NOREQUIRE]){
+			if (mapdata->noreqskill&SKILL_NOREQ_HP) req.hp = 0;	//1
+			if (mapdata->noreqskill&SKILL_NOREQ_MAXHP) req.mhp = 0;	//2
+			if (mapdata->noreqskill&SKILL_NOREQ_SP) req.sp = 0;	//4
+			if (mapdata->noreqskill&SKILL_NOREQ_HPRATE) req.hp_rate = 0;	//8
+			if (mapdata->noreqskill&SKILL_NOREQ_SPRATE) req.sp_rate = 0;	//16
+			if (mapdata->noreqskill&SKILL_NOREQ_ZENY) req.zeny = 0;	//32
+			if (mapdata->noreqskill&SKILL_NOREQ_WEAPON) req.weapon = 0;	//64
+			if (mapdata->noreqskill&SKILL_NOREQ_AMMO) { req.ammo = 0; req.ammo_qty = 0; }	//128
+			if (mapdata->noreqskill&SKILL_NOREQ_STATE) req.state = ST_NONE;	//256
+			if (mapdata->noreqskill&SKILL_NOREQ_STATUS) req.status_count = 0;	//512
+			if (mapdata->noreqskill&SKILL_NOREQ_SPIRIT) req.spiritball = 0;	//1024
+			if (mapdata->noreqskill&SKILL_NOREQ_ITEM) { memset(req.itemid,0,sizeof(req.itemid)); memset(req.amount,0,sizeof(req.amount)); }	//2048
+			if (mapdata->noreqskill&SKILL_NOREQ_EQUIP) req.eqItem_count = 0;	//4096
+		}
+	}
+	
 	return req;
 }
 
